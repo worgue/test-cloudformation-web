@@ -1,0 +1,340 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: security group configuration for webapp
+Parameters:
+  EnvironmentName:
+    Description: An environment name like 'dev-myprj' that is prefixed to resource names.
+    Type: String
+    MinLength : 1
+    MaxLength : 255
+    AllowedPattern : "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+Resources:
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${EnvironmentName} LoadBalancers
+      GroupName: !Sub ${EnvironmentName} balancer
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-balancer
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${EnvironmentName} public ec2 instance
+      GroupName: !Sub ${EnvironmentName} instance
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-instance
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+
+  LoadBalancerToFargateContainersSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Sub ${EnvironmentName} traffic between ALB and containers
+      GroupName: !Sub ${EnvironmentName} LoadBalancer to Containers
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: 'Inbound rule for all traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb-to-containers
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${EnvironmentName} container
+      GroupName: !Sub ${EnvironmentName} container
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: 'Inbound rule for all traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-container
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${EnvironmentName} rds postgresql
+      GroupName: !Sub ${EnvironmentName} rds
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: from instance
+          FromPort: 5432
+          IpProtocol: tcp
+          ToPort: 5432
+        - SourceSecurityGroupId: !Ref ContainerSecurityGroup
+          Description: from container
+          FromPort: 5432
+          IpProtocol: tcp
+          ToPort: 5432
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-rds
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${EnvironmentName} efs storage
+      GroupName: !Sub ${EnvironmentName} efs
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: from instance
+          FromPort: 2049
+          IpProtocol: tcp
+          ToPort: 2049
+        - SourceSecurityGroupId: !Ref ContainerSecurityGroup
+          Description: from container
+          FromPort: 2049
+          IpProtocol: tcp
+          ToPort: 2049
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-efs
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+
+  WebAppEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: !Sub ${EnvironmentName} ec2 web application iam role
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSESFullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+      RoleName: !Sub ${EnvironmentName}-ec2-web-role
+
+  WebAppEC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref WebAppEC2Role
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSESFullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+      RoleName: !Sub ${EnvironmentName}-ecs-task-role
+
+  ECSTaskExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: !Sub ${EnvironmentName} ecs task execution role
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: !Sub "${EnvironmentName}-AWS-Secrets-Manager"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentName}-*"
+      RoleName: !Sub ${EnvironmentName}-ecs-task-execution-role
+
+  EcsExecRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Ecs-exec-role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ssm:UpdateInstanceInformation"
+              - "ssmmessages:CreateControlChannel"
+              - "ssmmessages:CreateDataChannel"
+              - "ssmmessages:OpenControlChannel"
+              - "ssmmessages:OpenDataChannel"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "s3:GetEncryptionConfiguration"
+            Resource: "*"
+      Roles:
+        - !Ref ECSTaskRole
+
+Outputs:
+  LoadBalancerSecurityGroup:
+    Description: A reference to the loadbalancer security group
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-LOADBALANCER-SECURITYGROUP
+
+  EC2SecurityGroup:
+    Description: A reference to the ec2 instance security group
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-EC2-SECURITYGROUP
+
+  LoadBalancerToFargateContainersSecurityGroup:
+    Description: A reference to the security group between load balancer to fargate containers
+    Value: !Ref LoadBalancerToFargateContainersSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-LOADBALANCER-TO-FARGATE-CONTAINERS
+
+  ContainerSecurityGroup:
+    Description: A reference to the security group for fargate containers
+    Value: !Ref ContainerSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-CONTAINER-SECURITYGROUP
+
+  RDSSecurityGroup:
+    Description: A reference to the rds security group
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-RDS-SECURITYGROUP
+
+  EFSSecurityGroup:
+    Description: A reference to the efs security group
+    Value: !Ref EFSSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-EFS-SECURITYGROUP
+
+  WebAppEC2Role:
+    Description: A reference to the ec2 iam role
+    Value: !Ref WebAppEC2Role
+
+  WebAppEC2InstanceProfile:
+    Description: A reference to the ec2 iam instance profile
+    Value: !Ref WebAppEC2InstanceProfile
+    Export:
+      Name: !Sub ${EnvironmentName}-EC2-INSTANCE-PROFILE
+
+  ECSTaskRole:
+    Description: A reference to the ecs task execution role
+    Value: !Ref ECSTaskRole
+    Export:
+      Name: !Sub ${EnvironmentName}-ECS-TASK-ROLE
+
+  ECSTaskExecutionRole:
+    Description: A reference to the ecs task execution role
+    Value: !Ref ECSTaskExecutionRole
+    Export:
+      Name: !Sub ${EnvironmentName}-ECS-TASK-EXECUTION-ROLE
+
+  EcsExecRolePolicy:
+    Description: A reference to the ecs task exec role
+    Value: !Ref EcsExecRolePolicy

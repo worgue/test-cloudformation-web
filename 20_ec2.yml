@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ec2 configuration for webapp
+Parameters:
+  EnvironmentName:
+    Description: An environment name like 'dev-myprj' that is prefixed to resource names.
+    Type: String
+  OS:
+    Type: String
+    Default: ubuntu2004
+    AllowedValues:
+      - ubuntu2004
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+  InstanceVolumeSize:
+    Description: Instance volume size.
+    Type: Number
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 key pair to enable SSH access to the EC2 instances
+  InstanceHostName:
+    Description: An instance host name.
+    Type: String
+  InstanceSubnet:
+    Description: Set instance on which subnet.
+    Type: String
+    Default: PUBLIC
+    AllowedValues:
+      - PUBLIC
+      # - PRIVATE
+
+Mappings:
+  OS2Image:
+    ap-northeast-1:
+      ubuntu2004: ami-088da9557aae42f39
+
+Resources:
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !ImportValue
+          "Fn::Sub": '${EnvironmentName}-LOADBALANCER'
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: {'Fn::ImportValue': !Sub '${EnvironmentName}-CERTIFICATE'}
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref InstanceTargetGroup
+
+  InstanceTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-web-target
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+      Port: 80
+      Protocol: HTTP
+      Targets:
+        - Id: !Ref Instance
+          Port: 80
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${InstanceHostName}-eip
+      InstanceId: !Ref Instance
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap
+        - OS2Image
+        - !Ref 'AWS::Region'
+        - !Ref OS
+      KeyName: !Ref KeyName
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds:
+        - !ImportValue
+          "Fn::Sub": '${EnvironmentName}-EC2-SECURITYGROUP'
+      SubnetId: !Select
+        - 0
+        - !Split
+          - ","
+          - !ImportValue
+            "Fn::Sub": '${EnvironmentName}-${InstanceSubnet}-SUBNETS'
+      IamInstanceProfile: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-EC2-INSTANCE-PROFILE'
+      Monitoring: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${InstanceHostName}
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: !Ref InstanceVolumeSize
+
+Outputs:
+  Instance:
+    Description: ec2 instance
+    Value: !Ref Instance
+  EIP:
+    Description: elastic ip
+    Value: !Ref EIP
+  OS:
+    Description: os
+    Value: !Ref OS
+  InstanceType:
+    Description: instance type
+    Value: !Ref InstanceType
+  KeyName:
+    Description: key name
+    Value: !Ref KeyName
+  EnvironmentName:
+    Description: env
+    Value: !Ref EnvironmentName
+  InstanceSubnet:
+    Description: instance subnet
+    Value: !Ref InstanceSubnet

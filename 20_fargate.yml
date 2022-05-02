@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ec2 configuration for webapp
+Parameters:
+  EnvironmentName:
+    Description: An environment name like 'dev-myprj' that is prefixed to resource names.
+    Type: String
+  DeployVersion:
+    Description: A deploy version
+    Type: String
+    Default: latest
+  DjangoEnvPath:
+    Description: DJANGO_ENV_PATH e.g) myprj/env/env.default
+    Type: String
+  DatabaseUrlSecretArn:
+    Description: DATABASE_URL from secret manager arn
+    Type: String
+  ServiceCount:
+    Description: ECSService DesiredCount
+    Type: Number
+    Default: 1
+  NginxRepoName:
+    Description: A nginx repository name
+    Type: String
+  DjangoRepoName:
+    Description: A django repository name
+    Type: String
+  DjangoCommand:
+    Description: Command prameter for Django. Split with a comma.
+    Type: String
+    Default: "gunicorn,--timeout,60,--bind,0.0.0.0:8000,--worker-class,gevent,--access-logfile,-,--log-level,debug,--capture-output,xxx.wsgi:application"
+
+Resources:
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities:
+        - "FARGATE"
+      ExecutionRoleArn: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-ECS-TASK-EXECUTION-ROLE'
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        - Name: !Sub "${NginxRepoName}"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${NginxRepoName}:${DeployVersion}"
+          MemoryReservation: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          MountPoints:
+            - ContainerPath: /media/efs
+              SourceVolume: efs-mount-vol
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref NginxCloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: !Ref EnvironmentName
+        - Name: !Sub "${DjangoRepoName}"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DjangoRepoName}:${DeployVersion}"
+          MemoryReservation: 256
+          Memory: 512
+          Command: !Split
+            - ","
+            - !Ref DjangoCommand
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          MountPoints:
+            - ContainerPath: /media/efs
+              SourceVolume: efs-mount-vol
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref DjangoCloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: !Ref EnvironmentName
+          Environment:
+            - Name: DJANGO_ENV_PATH
+              Value: !Ref DjangoEnvPath
+          Secrets:
+            - Name: DATABASE_URL
+              ValueFrom: !Ref DatabaseUrlSecretArn
+      TaskRoleArn: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-ECS-TASK-ROLE'
+      Volumes:
+        - Name: efs-mount-vol
+          EFSVolumeConfiguration:
+            FilesystemId: !ImportValue
+              "Fn::Sub": '${EnvironmentName}-EFS-ID'
+            TransitEncryption: ENABLED
+  NginxCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-nginx'
+      RetentionInDays: 365
+  DjangoCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-django'
+      RetentionInDays: 365
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: !Sub ${EnvironmentName}-ecscluster-web
+  FargateTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Sub ${EnvironmentName}-fargate-target
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+      Protocol: HTTP
+      Port: 80
+      HealthCheckPath: /
+      TargetType: ip
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-LOADBALANCER'
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: {'Fn::ImportValue': !Sub '${EnvironmentName}-CERTIFICATE'}
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FargateTargetGroup
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: HTTPSListener
+    Properties:
+      EnableExecuteCommand: true
+      LaunchType: FARGATE
+      Cluster:
+        Ref: "ECSCluster"
+      DesiredCount: !Ref ServiceCount
+      TaskDefinition:
+        Ref: "TaskDefinition"
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue
+              "Fn::Sub": '${EnvironmentName}-CONTAINER-SECURITYGROUP'
+          Subnets: !Split
+            - ","
+            - !ImportValue
+              "Fn::Sub": '${EnvironmentName}-PUBLIC-SUBNETS'
+      LoadBalancers:
+        - ContainerName: !Sub "${NginxRepoName}"
+          ContainerPort: 80
+          TargetGroupArn:
+            Ref: FargateTargetGroup
+
+Outputs:
+  TaskDefinition:
+    Description: fargate task definition
+    Value: !Ref TaskDefinition
+  NginxCloudWatchLogsGroup:
+    Description: cloud watch logs group
+    Value: !Ref NginxCloudWatchLogsGroup
+  DjangoCloudWatchLogsGroup:
+    Description: cloud watch logs group
+    Value: !Ref DjangoCloudWatchLogsGroup
+  ECSCluster:
+    Description: ecs cluster
+    Value: !Ref ECSCluster
+  FargateTargetGroup:
+    Description: fargate target group
+    Value: !Ref FargateTargetGroup
+  HTTPSListener:
+    Description: httplistener
+    Value: !Ref HTTPSListener
+  ECSService:
+    Description: ecs service
+    Value: !Ref ECSService
+  DeployVersion:
+    Description: A deploy version
+    Value: !Ref DeployVersion
+  DjangoEnvPath:
+    Description: DJANGO_ENV_PATH
+    Value: !Ref DjangoEnvPath
+  DatabaseUrlSecretArn:
+    Description: DATABASE_URL from secreta manager arn
+    Value: !Ref DatabaseUrlSecretArn
+  ServiceCount:
+    Description: ECSService DesiredCount
+    Value: !Ref ServiceCount

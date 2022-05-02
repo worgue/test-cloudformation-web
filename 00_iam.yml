@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create iam switch role for IP restriction. Create user before using this template and edit Principal.
+
+Parameters:
+  ValidIps:
+    Description: Comma separated valid IP networks. e.g)127.0.0.1,127.0.0.0/30
+    Type: String
+
+Resources:
+  RequireMFAGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: require-mfa-group
+      Policies:
+        - PolicyName: require-mfa
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: "AllowViewAccountInfo"
+                Effect: "Allow"
+                Action: "iam:ListVirtualMFADevices"
+                Resource: "*"
+              - Sid: "AllowManageOwnVirtualMFADevice"
+                Effect: "Allow"
+                Action:
+                  - "iam:CreateVirtualMFADevice"
+                  - "iam:DeleteVirtualMFADevice"
+                Resource: "arn:aws:iam::*:mfa/${aws:username}"
+              - Sid: "AllowManageOwnUserMFA"
+                Effect: "Allow"
+                Action:
+                  - "iam:DeactivateMFADevice"
+                  - "iam:EnableMFADevice"
+                  - "iam:GetUser"
+                  - "iam:ListMFADevices"
+                  - "iam:ResyncMFADevice"
+                Resource: "arn:aws:iam::*:user/${aws:username}"
+              - Sid: "DenyAllExceptListedIfNoMFA"
+                Effect: "Deny"
+                Resource: "*"
+                Condition:
+                  BoolIfExists:
+                    aws:MultiFactorAuthPresent: "false"
+                NotAction:
+                  - "iam:CreateVirtualMFADevice"
+                  - "iam:EnableMFADevice"
+                  - "iam:GetUser"
+                  - "iam:ListMFADevices"
+                  - "iam:ListVirtualMFADevices"
+                  - "iam:ResyncMFADevice"
+                  - "sts:GetSessionToken"
+
+  RoleSwichTo:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:user/ip-restrected-existing-username'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:user/ipuser'
+            Action: sts:AssumeRole
+          - Effect: Deny
+            Principal:
+              AWS:
+                # - !Sub 'arn:aws:iam::${AWS::AccountId}:user/ip-restrected-existing-username'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:user/ipuser'
+            Action: sts:AssumeRole
+            Condition:
+              NotIpAddress:
+                aws:SourceIp: !Split [",", !Ref ValidIps]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      MaxSessionDuration: 10800
+      RoleName: dev-role

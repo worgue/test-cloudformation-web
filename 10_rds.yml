@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template to create Aurora Postgresql Cluster DB Instance'
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name like 'dev-myprj' that is prefixed to resource names.
+    Type: String
+  DBEngineVersion:
+    Description: Select Database Engine Version
+    Type: String
+    Default: '12.10'
+    AllowedValues:
+      - '12.10'
+      - '13.6'
+  DBInstanceClass:
+    Default: db.t4g.medium
+    Description: Database Instance Class
+    Type: String
+    AllowedValues:
+    - db.t4g.medium
+    - db.t4g.large
+  DBSnapshotName:
+    Description: Optional. DB Snapshot ID to restore database. Leave this blank if you are not restoring from a snapshot.
+    Type: String
+    Default: ""
+  EnvironmentStage:
+    Type: String
+    Description: The environment tag is used to designate the Environment Stage of the associated AWS resource.
+    AllowedValues:
+      - dev
+      - prod
+    Default: dev
+
+Conditions:
+  IsUseDBSnapshot: !Not [!Equals [!Ref DBSnapshotName, ""]]
+  IsNotUseDBSnapshot: !Not [Condition: IsUseDBSnapshot]
+  IsProd: !Equals [!Ref EnvironmentStage, 'prod']
+
+
+Resources:
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !Ref DBEngineVersion
+      Port: 5432
+      MasterUsername:
+        !If [IsUseDBSnapshot, !Ref "AWS::NoValue", !Join ['', ['{{resolve:secretsmanager:', !Ref AuroraMasterSecret, ':SecretString:username}}' ]]]
+      MasterUserPassword:
+        !If [IsUseDBSnapshot, !Ref "AWS::NoValue", !Join ['', ['{{resolve:secretsmanager:', !Ref AuroraMasterSecret, ':SecretString:password}}' ]]]
+      DBSubnetGroupName: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-DBSUBNETGROUP'
+      VpcSecurityGroupIds:
+        - !ImportValue
+          "Fn::Sub": '${EnvironmentName}-RDS-SECURITYGROUP'
+      BackupRetentionPeriod: 7
+      SnapshotIdentifier: !If [IsUseDBSnapshot, !Ref DBSnapshotName, !Ref "AWS::NoValue"]
+      StorageEncrypted:  !If [IsUseDBSnapshot, !Ref "AWS::NoValue", true]
+  AuroraDBInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: !Ref DBInstanceClass
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      Engine: aurora-postgresql
+      EngineVersion: !Ref DBEngineVersion
+      MonitoringInterval: !If [IsProd, 1, 0]
+      AutoMinorVersionUpgrade: !If [IsProd, 'false', 'true']
+      DBSubnetGroupName: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-DBSUBNETGROUP'
+      PubliclyAccessible: false
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: !If [IsProd, 731, 7]
+  AuroraMasterSecret:
+    Condition: IsNotUseDBSnapshot
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Join ['/', [!Ref EnvironmentStage, 'aurora-pg', !Ref 'AWS::StackName']]
+      Description: !Join ['', ['Aurora PostgreSQL Master User Secret ', 'for CloudFormation Stack ', !Ref 'AWS::StackName']]
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "postgres"}'
+        GenerateStringKey: password
+        ExcludeCharacters: '"@/\'
+        PasswordLength: 16
+
+Outputs:
+  EndpointAddress:
+    Description: db cluster endpoint address
+    Value: !GetAtt 'AuroraDBCluster.Endpoint.Address'
+  EndpointPort:
+    Description: db cluster endpoint port
+    Value: !GetAtt 'AuroraDBCluster.Endpoint.Port'
