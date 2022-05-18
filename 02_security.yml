@@ -91,21 +91,6 @@ Resources:
       VpcId: !ImportValue
         "Fn::Sub": '${EnvironmentName}-VPCID'
 
-  LoadBalancerToFargateContainersSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: !Sub ${EnvironmentName} traffic between ALB and containers
-      GroupName: !Sub ${EnvironmentName} LoadBalancer to Containers
-      SecurityGroupIngress:
-        - IpProtocol: -1
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          Description: 'Inbound rule for all traffic'
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-alb-to-containers
-      VpcId: !ImportValue
-        "Fn::Sub": '${EnvironmentName}-VPCID'
-
   ContainerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -278,12 +263,6 @@ Outputs:
     Value: !Ref EC2SecurityGroup
     Export:
       Name: !Sub ${EnvironmentName}-EC2-SECURITYGROUP
-
-  LoadBalancerToFargateContainersSecurityGroup:
-    Description: A reference to the security group between load balancer to fargate containers
-    Value: !Ref LoadBalancerToFargateContainersSecurityGroup
-    Export:
-      Name: !Sub ${EnvironmentName}-LOADBALANCER-TO-FARGATE-CONTAINERS
 
   ContainerSecurityGroup:
     Description: A reference to the security group for fargate containers
