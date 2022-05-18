@@ -101,9 +101,11 @@ Resources:
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       SecurityGroupIngress:
-        - IpProtocol: -1
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
           Description: 'Inbound rule for all traffic'
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-container
