@@ -6,9 +6,11 @@ Parameters:
     Type: String
   OS:
     Type: String
-    Default: ubuntu2004
+    Default: amzn2
     AllowedValues:
+      - amzn2
       - ubuntu2004
+      - windows2019base
   InstanceType:
     Description: WebServer EC2 instance type
     Type: String
@@ -24,6 +26,7 @@ Parameters:
   InstanceVolumeSize:
     Description: Instance volume size.
     Type: Number
+    Default: 32
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 key pair to enable SSH access to the EC2 instances
@@ -41,7 +44,9 @@ Parameters:
 Mappings:
   OS2Image:
     ap-northeast-1:
+      amzn2: ami-0ab0bbbd329f565e6
       ubuntu2004: ami-088da9557aae42f39
+      windows2019base: ami-02812ebb523edc23a
 
 Resources:
   HTTPSListener:
