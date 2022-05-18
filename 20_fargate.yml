@@ -28,6 +28,13 @@ Parameters:
     Description: Command prameter for Django. Split with a comma.
     Type: String
     Default: "gunicorn,--timeout,60,--bind,0.0.0.0:8000,--worker-class,gevent,--access-logfile,-,--log-level,debug,--capture-output,xxx.wsgi:application"
+  ECSServiceAssignPublicIp:
+    Description: Assign public ip to ECS Service.
+    Type: String
+    Default: DISABLED
+    AllowedValues:
+      - DISABLED
+      - ENABLED
 
 Resources:
   TaskDefinition:
@@ -142,7 +149,7 @@ Resources:
         MinimumHealthyPercent: 0
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: !Ref ECSServiceAssignPublicIp
           SecurityGroups:
             - !ImportValue
               "Fn::Sub": '${EnvironmentName}-CONTAINER-SECURITYGROUP'
@@ -190,3 +197,6 @@ Outputs:
   ServiceCount:
     Description: ECSService DesiredCount
     Value: !Ref ServiceCount
+  ECSServiceAssignPublicIp:
+    Description: Assign public ip to ECS Service
+    Value: !Ref ECSServiceAssignPublicIp
