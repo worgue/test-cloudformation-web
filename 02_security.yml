@@ -55,36 +55,11 @@ Resources:
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          Description: from 0.0.0.0/0:80
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
-        - CidrIpv6: ::/0
-          Description: from ::/0:80
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
-        - CidrIp: 0.0.0.0/0
-          Description: from 0.0.0.0/0:80
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: 'allow http'
           FromPort: 80
           IpProtocol: tcp
           ToPort: 80
-        - CidrIpv6: ::/0
-          Description: from ::/0:80
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          Description: from 0.0.0.0/0:80
-          FromPort: 443
-          IpProtocol: tcp
-          ToPort: 443
-        - CidrIpv6: ::/0
-          Description: from ::/0:80
-          FromPort: 443
-          IpProtocol: tcp
-          ToPort: 443
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-instance
@@ -102,7 +77,7 @@ Resources:
           IpProtocol: "-1"
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          Description: 'Inbound rule for all traffic'
+          Description: 'allow http'
           FromPort: 80
           IpProtocol: tcp
           ToPort: 80
@@ -163,25 +138,6 @@ Resources:
           Value: !Sub ${EnvironmentName}-efs
       VpcId: !ImportValue
         "Fn::Sub": '${EnvironmentName}-VPCID'
-
-  WebAppEC2Role:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Description: !Sub ${EnvironmentName} ec2 web application iam role
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonS3FullAccess
-        - arn:aws:iam::aws:policy/AmazonSESFullAccess
-        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
-      RoleName: !Sub ${EnvironmentName}-ec2-web-role
 
   ECSTaskRole:
     Type: AWS::IAM::Role
@@ -277,10 +233,6 @@ Outputs:
     Value: !Ref EFSSecurityGroup
     Export:
       Name: !Sub ${EnvironmentName}-EFS-SECURITYGROUP
-
-  WebAppEC2Role:
-    Description: A reference to the ec2 iam role
-    Value: !Ref WebAppEC2Role
 
   ECSTaskRole:
     Description: A reference to the ecs task execution role
