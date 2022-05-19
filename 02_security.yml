@@ -183,12 +183,6 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
       RoleName: !Sub ${EnvironmentName}-ec2-web-role
 
-  WebAppEC2InstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      Roles:
-        - !Ref WebAppEC2Role
-
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -287,12 +281,6 @@ Outputs:
   WebAppEC2Role:
     Description: A reference to the ec2 iam role
     Value: !Ref WebAppEC2Role
-
-  WebAppEC2InstanceProfile:
-    Description: A reference to the ec2 iam instance profile
-    Value: !Ref WebAppEC2InstanceProfile
-    Export:
-      Name: !Sub ${EnvironmentName}-EC2-INSTANCE-PROFILE
 
   ECSTaskRole:
     Description: A reference to the ecs task execution role

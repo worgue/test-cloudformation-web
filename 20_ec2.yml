@@ -39,7 +39,7 @@ Parameters:
     Default: PUBLIC
     AllowedValues:
       - PUBLIC
-      # - PRIVATE
+      - PRIVATE
 
 Mappings:
   OS2Image:
@@ -47,6 +47,7 @@ Mappings:
       amzn2: ami-0ab0bbbd329f565e6
       ubuntu2004: ami-088da9557aae42f39
       windows2019base: ami-02812ebb523edc23a
+
 
 Resources:
   HTTPSListener:
@@ -101,8 +102,7 @@ Resources:
           - ","
           - !ImportValue
             "Fn::Sub": '${EnvironmentName}-${InstanceSubnet}-SUBNETS'
-      IamInstanceProfile: !ImportValue
-        "Fn::Sub": '${EnvironmentName}-EC2-INSTANCE-PROFILE'
+      IamInstanceProfile: !Ref EC2InstanceProfile
       Monitoring: true
       Tags:
         - Key: Name
@@ -111,6 +111,94 @@ Resources:
       - DeviceName: "/dev/sda1"
         Ebs:
           VolumeSize: !Ref InstanceVolumeSize
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: !Sub ${EnvironmentName} ec2 web application iam role
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSESFullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      RoleName: !Sub ${EnvironmentName}-ec2-role
+
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  SSMEndpointSG: # for ssm login
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+      GroupName: !Sub "${EnvironmentName}-ssm-endpoint-sg"
+      GroupDescription: !Sub "${EnvironmentName}-ssm-endpoint-sg"
+
+  SSMEndpointSGIngress: # for ssm login
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      GroupId: !Ref SSMEndpointSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 10.0.0.0/16
+
+  EC2MessageEndpoint: # for ssm login
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2messages"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+      SubnetIds: !Split
+        - ","
+        - !ImportValue
+          "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SecurityGroupIds:
+        - !Ref SSMEndpointSG
+
+  SSMEndpoint: # for ssm login
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+      SubnetIds: !Split
+        - ","
+        - !ImportValue
+          "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SecurityGroupIds:
+        - !Ref SSMEndpointSG
+
+  SSMMessagesEndpoint: # for ssm login
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssmmessages"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-VPCID'
+      SubnetIds: !Split
+        - ","
+        - !ImportValue
+          "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SecurityGroupIds:
+        - !Ref SSMEndpointSG
 
 Outputs:
   Instance:
