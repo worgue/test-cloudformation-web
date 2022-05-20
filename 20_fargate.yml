@@ -37,13 +37,76 @@ Parameters:
       - ENABLED
 
 Resources:
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSESFullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+      RoleName: !Sub ${EnvironmentName}-ecs-task-role
+
+  ECSTaskExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: !Sub ${EnvironmentName} ecs task execution role
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: !Sub "${EnvironmentName}-AWS-Secrets-Manager"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentName}-*"
+      RoleName: !Sub ${EnvironmentName}-ecs-task-execution-role
+
+  EcsExecRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Ecs-exec-role
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ssm:UpdateInstanceInformation"
+              - "ssmmessages:CreateControlChannel"
+              - "ssmmessages:CreateDataChannel"
+              - "ssmmessages:OpenControlChannel"
+              - "ssmmessages:OpenDataChannel"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "s3:GetEncryptionConfiguration"
+            Resource: "*"
+      Roles:
+        - !Ref ECSTaskRole
+
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       RequiresCompatibilities:
         - "FARGATE"
-      ExecutionRoleArn: !ImportValue
-        "Fn::Sub": '${EnvironmentName}-ECS-TASK-EXECUTION-ROLE'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       Cpu: 512
       Memory: 1024
       NetworkMode: awsvpc
@@ -89,28 +152,31 @@ Resources:
           Secrets:
             - Name: DATABASE_URL
               ValueFrom: !Ref DatabaseUrlSecretArn
-      TaskRoleArn: !ImportValue
-        "Fn::Sub": '${EnvironmentName}-ECS-TASK-ROLE'
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
       Volumes:
         - Name: efs-mount-vol
           EFSVolumeConfiguration:
             FilesystemId: !ImportValue
               "Fn::Sub": '${EnvironmentName}-EFS-ID'
             TransitEncryption: ENABLED
+
   NginxCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '${AWS::StackName}-nginx'
       RetentionInDays: 365
+
   DjangoCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '${AWS::StackName}-django'
       RetentionInDays: 365
+
   ECSCluster:
     Type: 'AWS::ECS::Cluster'
     Properties:
       ClusterName: !Sub ${EnvironmentName}-ecscluster-web
+
   FargateTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
@@ -121,6 +187,7 @@ Resources:
       Port: 80
       HealthCheckPath: /
       TargetType: ip
+
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -133,6 +200,7 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref FargateTargetGroup
+
   ECSService:
     Type: AWS::ECS::Service
     DependsOn: HTTPSListener
