@@ -19,12 +19,8 @@ Resources:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt EIPNATGateway1.AllocationId
-      SubnetId: !Select
-        - 0
-        - !Split
-          - ","
-          - !ImportValue
-            "Fn::Sub": '${EnvironmentName}-PUBLIC-SUBNETS'
+      SubnetId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-PUBLIC-SUBNETS-1'
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -47,12 +43,8 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
-      SubnetId: !Select
-        - 0
-        - !Split
-          - ","
-          - !ImportValue
-            "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SubnetId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS-1'
 
   EIPNATGateway2:
     Type: "AWS::EC2::EIP"
@@ -66,12 +58,8 @@ Resources:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt EIPNATGateway2.AllocationId
-      SubnetId: !Select
-        - 1
-        - !Split
-          - ","
-          - !ImportValue
-            "Fn::Sub": '${EnvironmentName}-PUBLIC-SUBNETS'
+      SubnetId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-PUBLIC-SUBNETS-2'
 
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
@@ -94,12 +82,8 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
-      SubnetId: !Select
-        - 0
-        - !Split
-          - ","
-          - !ImportValue
-            "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SubnetId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS-2'
 
 
 Outputs:

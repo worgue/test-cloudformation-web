@@ -23,12 +23,8 @@ Resources:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: !Ref FileSystem
-      SubnetId: !Select
-        - 0
-        - !Split
-          - ","
-          - !ImportValue
-            "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SubnetId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS-1'
       SecurityGroups:
         - !ImportValue
           "Fn::Sub": '${EnvironmentName}-EFS-SECURITYGROUP'
@@ -36,12 +32,8 @@ Resources:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: !Ref FileSystem
-      SubnetId: !Select
-        - 1
-        - !Split
-          - ","
-          - !ImportValue
-            "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS'
+      SubnetId: !ImportValue
+        "Fn::Sub": '${EnvironmentName}-PRIVATE-SUBNETS-2'
       SecurityGroups:
         - !ImportValue
           "Fn::Sub": '${EnvironmentName}-EFS-SECURITYGROUP'
