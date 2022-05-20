@@ -152,7 +152,7 @@ Resources:
           AssignPublicIp: !Ref ECSServiceAssignPublicIp
           SecurityGroups:
             - !ImportValue
-              "Fn::Sub": '${EnvironmentName}-CONTAINER-SECURITYGROUP'
+              "Fn::Sub": '${EnvironmentName}-APP-SECURITYGROUP'
           Subnets: !Split
             - ","
             - !ImportValue

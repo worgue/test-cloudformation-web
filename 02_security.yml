@@ -45,11 +45,11 @@ Resources:
       VpcId: !ImportValue
         "Fn::Sub": '${EnvironmentName}-VPCID'
 
-  EC2SecurityGroup:
+  AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Sub ${EnvironmentName} public ec2 instance
-      GroupName: !Sub ${EnvironmentName} instance
+      GroupDescription: !Sub ${EnvironmentName} app
+      GroupName: !Sub ${EnvironmentName} app
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           Description: Allow all outbound traffic by default
@@ -62,28 +62,7 @@ Resources:
           ToPort: 80
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-instance
-      VpcId: !ImportValue
-        "Fn::Sub": '${EnvironmentName}-VPCID'
-
-  ContainerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub ${EnvironmentName} container
-      GroupName: !Sub ${EnvironmentName} container
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          Description: Allow all outbound traffic by default
-          IpProtocol: "-1"
-      SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          Description: 'allow http'
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-container
+          Value: !Sub ${EnvironmentName}-app
       VpcId: !ImportValue
         "Fn::Sub": '${EnvironmentName}-VPCID'
 
@@ -97,13 +76,8 @@ Resources:
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref EC2SecurityGroup
+        - SourceSecurityGroupId: !Ref AppSecurityGroup
           Description: from instance
-          FromPort: 5432
-          IpProtocol: tcp
-          ToPort: 5432
-        - SourceSecurityGroupId: !Ref ContainerSecurityGroup
-          Description: from container
           FromPort: 5432
           IpProtocol: tcp
           ToPort: 5432
@@ -123,13 +97,8 @@ Resources:
           Description: Allow all outbound traffic by default
           IpProtocol: "-1"
       SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref EC2SecurityGroup
+        - SourceSecurityGroupId: !Ref AppSecurityGroup
           Description: from instance
-          FromPort: 2049
-          IpProtocol: tcp
-          ToPort: 2049
-        - SourceSecurityGroupId: !Ref ContainerSecurityGroup
-          Description: from container
           FromPort: 2049
           IpProtocol: tcp
           ToPort: 2049
@@ -210,17 +179,11 @@ Outputs:
     Export:
       Name: !Sub ${EnvironmentName}-LOADBALANCER-SECURITYGROUP
 
-  EC2SecurityGroup:
-    Description: A reference to the ec2 instance security group
-    Value: !Ref EC2SecurityGroup
+  AppSecurityGroup:
+    Description: A reference to the app security group
+    Value: !Ref AppSecurityGroup
     Export:
-      Name: !Sub ${EnvironmentName}-EC2-SECURITYGROUP
-
-  ContainerSecurityGroup:
-    Description: A reference to the security group for fargate containers
-    Value: !Ref ContainerSecurityGroup
-    Export:
-      Name: !Sub ${EnvironmentName}-CONTAINER-SECURITYGROUP
+      Name: !Sub ${EnvironmentName}-APP-SECURITYGROUP
 
   RDSSecurityGroup:
     Description: A reference to the rds security group

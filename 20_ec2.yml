@@ -95,7 +95,7 @@ Resources:
       InstanceType: !Ref InstanceType
       SecurityGroupIds:
         - !ImportValue
-          "Fn::Sub": '${EnvironmentName}-EC2-SECURITYGROUP'
+          "Fn::Sub": '${EnvironmentName}-APP-SECURITYGROUP'
       SubnetId: !Select
         - 0
         - !Split
