@@ -12,7 +12,10 @@ Parameters:
     Description: DJANGO_ENV_PATH e.g) myprj/env/env.default
     Type: String
   DatabaseUrlSecretArn:
-    Description: DATABASE_URL from secret manager arn
+    Description: DATABASE_URL from secret manager arn e.g) arn:aws:secretsmanager:ap-northeast-1:`account-id`:secret:xxx-xxx-DATABASE_URL-xxxxx
+    Type: String
+  SecretKeySecretArn:
+    Description: SECRET_KEY from secreta manager arn e.g) arn:aws:secretsmanager:ap-northeast-1:`account-id`:secret:xxx-xxx-SECRET_KEY-xxxxx
     Type: String
   ServiceCount:
     Description: ECSService DesiredCount
@@ -35,6 +38,12 @@ Parameters:
     AllowedValues:
       - DISABLED
       - ENABLED
+  ReadOnly:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
 
 Resources:
   ECSTaskRole:
@@ -113,6 +122,7 @@ Resources:
       ContainerDefinitions:
         - Name: !Sub "${NginxRepoName}"
           Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${NginxRepoName}:${DeployVersion}"
+          ReadonlyRootFilesystem: !Ref ReadOnly
           MemoryReservation: 256
           Memory: 512
           PortMappings:
@@ -129,6 +139,7 @@ Resources:
               awslogs-stream-prefix: !Ref EnvironmentName
         - Name: !Sub "${DjangoRepoName}"
           Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DjangoRepoName}:${DeployVersion}"
+          ReadonlyRootFilesystem: !Ref ReadOnly
           MemoryReservation: 256
           Memory: 512
           Command: !Split
@@ -152,6 +163,8 @@ Resources:
           Secrets:
             - Name: DATABASE_URL
               ValueFrom: !Ref DatabaseUrlSecretArn
+            - Name: SECRET_KEY
+              ValueFrom: !Ref SecretKeySecretArn
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       Volumes:
         - Name: efs-mount-vol
