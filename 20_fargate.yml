@@ -31,19 +31,22 @@ Parameters:
     Description: Command prameter for Django. Split with a comma.
     Type: String
     Default: "gunicorn,--timeout,60,--bind,0.0.0.0:8000,--worker-class,gevent,--access-logfile,-,--log-level,debug,--capture-output,xxx.wsgi:application"
-  ECSServiceAssignPublicIp:
-    Description: Assign public ip to ECS Service.
+  ContainerSubnet:
+    Description: Set instance on which subnet. If this is PUBLIC, ECS Service assign public ip to tasks.
     Type: String
-    Default: DISABLED
+    Default: PUBLIC
     AllowedValues:
-      - DISABLED
-      - ENABLED
+      - PUBLIC
+      - PRIVATE
   ReadOnly:
     Type: String
     Default: true
     AllowedValues:
       - true
       - false
+
+Conditions:
+  IsPublic: !Equals [!Ref ContainerSubnet, 'PUBLIC']
 
 Resources:
   ECSTaskRole:
@@ -230,14 +233,14 @@ Resources:
         MinimumHealthyPercent: 0
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: !Ref ECSServiceAssignPublicIp
+          AssignPublicIp: !If [IsPublic, 'ENABLED', 'DISABLED']
           SecurityGroups:
             - !ImportValue
               "Fn::Sub": '${EnvironmentName}-APP-SECURITYGROUP'
           Subnets: !Split
             - ","
             - !ImportValue
-              "Fn::Sub": '${EnvironmentName}-PUBLIC-SUBNETS'
+              "Fn::Sub": '${EnvironmentName}-${ContainerSubnet}-SUBNETS'
       LoadBalancers:
         - ContainerName: !Sub "${NginxRepoName}"
           ContainerPort: 80
@@ -278,6 +281,6 @@ Outputs:
   ServiceCount:
     Description: ECSService DesiredCount
     Value: !Ref ServiceCount
-  ECSServiceAssignPublicIp:
-    Description: Assign public ip to ECS Service
-    Value: !Ref ECSServiceAssignPublicIp
+  ContainerSubnet:
+    Description: Container subnet. If PUBLIC, assign public ip to tasks.
+    Value: !Ref ContainerSubnet
